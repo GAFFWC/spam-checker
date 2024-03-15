@@ -19,10 +19,10 @@ const isSpam = async (content: string, spamLinkDomains: string[], redirectionDep
           return true;
         }
 
-        const hrefRegex = /<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1/g;
+        const hrefRegex = /<a href=(["'])(.*?)\1/g;
         let match;
         while (match = hrefRegex.exec(body)) {
-          const href = match[2];
+          const href = match[1];
           if (href.startsWith('http')) {
             if (await check(href, depth - 1)) {
               visited.set(url, true);
