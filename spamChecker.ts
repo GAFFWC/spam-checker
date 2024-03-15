@@ -9,6 +9,7 @@ const isSpam = async (content: string, spamLinkDomains: string[], redirectionDep
     }
 
     visited.set(url, false);
+    const nextLinks = [];
     try {
       const response = await axios.get(url, { maxRedirects: 0 });
       const body = response.data;
@@ -24,43 +25,42 @@ const isSpam = async (content: string, spamLinkDomains: string[], redirectionDep
         while (match = hrefRegex.exec(body)) {
           const href = match[1];
           if (href.startsWith('http')) {
-            if (await check(href, depth - 1)) {
+            if (spamLinkDomains.some(sld => href.includes(sld))) {
               visited.set(url, true);
               return true;
             }
+
+            nextLinks.push(href);
           }
         }
       }
-
-      return false;
     } catch (e) {
       if (e instanceof AxiosError) {
         if (e.response?.status === 302) {
           const location = e.response.headers?.location;
-          if (!location) {
-            return false;
-          }
+          if (location) {
+            if (spamLinkDomains.some(sld => location.includes(sld))) {
+              visited.set(url, true);
+              return true;
+            }
 
-          if (spamLinkDomains.some(sld => location.includes(sld))) {
-            visited.set(url, true);
-            return true;
+            nextLinks.push(location);
           }
-
-          return check(location, depth - 1);
         }
+      } else {
+        console.error(e);
       }
-
-      console.error(e);
-      return false;
     }
+
+    if (nextLinks.length) {
+      const results = await Promise.all(nextLinks.map(link => check(link, depth - 1)));
+      return results.some(result => result);
+    }
+
+    return false;
   }
 
   const links = content.split(' ').filter(s => s.startsWith('http'));
-  for (const link of links) {
-    if (await check(link, redirectionDepth)) {
-      return true;
-    }
-  }
-
-  return false;
-};
+  const results = await Promise.all(links.map(link => check(link, redirectionDepth)));
+  return results.some(result => result);
+}
